@@ -1,4 +1,4 @@
-pyDAS is developed by [Frederick Massin](http://github/fmassin) and Pascal Edme at the [Swiss Seismological Service](http//seismo.ethz.ch) of the ETHZ.
+pyDAS is developed by [Frederick Massin](https://github.com/FMassin) and Pascal Edme at the [Swiss Seismological Service](http://seismo.ethz.ch) of the ETHZ.
 
 # What is pyDAS?
 Currently, pyDAS is a set of Python functions for converting and managing data related to DAS. Here's a brief breakdown:
@@ -15,4 +15,4 @@ Currently, pyDAS is a set of Python functions for converting and managing data r
 4. **Purpose**: The code is intended to automate and streamline the process of managing DAS seismic data, converting formats, and preparing data for analysis and archiving, especially in environments that utilize SeisComP.
 
 # Testing pyDAS
-To test pyDAS, you can run the Jupyter Notebook `pydas_test.ipynb` located in the root directory. This notebook will guide you through an example on how to use pyDAS and its functions.
+To test pyDAS, you can run [the Jupyter Notebook](pydas_test.ipynb) located in the root directory. This notebook will guide you through an example on how to use pyDAS and its functions.
