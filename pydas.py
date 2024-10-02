@@ -234,7 +234,7 @@ def h5toseed(strainfile=None,
 
     if velocityfile is not None:
         with h5py.File(velocityfile, 'r') as file:
-            velocity_array = np.transpose(np.array(file[datakey])) / sensitivity
+            velocity_array = np.array(file[datakey]) / sensitivity
             print('velocity_array.shape : %s'%str(velocity_array.shape))
 
         velocity_array = velocity_array.astype(np.float64)
