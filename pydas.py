@@ -12,26 +12,12 @@ from glob import glob
 defaultseiscompschema = 'xmlns="http://geofon.gfz-potsdam.de/ns/seiscomp3-schema/0.12" version="0.12"'
 
 # default binding template for h5toseed
-defaultbindingtemplate = '''      <module publicID="Config/trunk" name="trunk" enabled="true">
-                <station publicID="Config/trunk/%s/%s"
-                            networkCode="%s" stationCode="%s" enabled="true">
-                    <setup name="default" enabled="true">
-                    <parameterSetID>ParameterSet/trunk/Station/%s/%s/default</parameterSetID>
-                    </setup>
-                </station>
-            </module>
-            <parameterSet publicID="ParameterSet/trunk/Station/%s/%s/default" created="1970-01-01T00:00:00.000000Z">
-                <moduleID>Config/trunk</moduleID>
-                <parameter publicID="smi:ch.ethz.sed/h5toseed/Parameter/19700101000000.000000.00000">
-                    <name>detecLocid</name>
-                    <value>"00"</value>
-                </parameter>
-                <parameter publicID="smi:ch.ethz.sed/h5toseed/Parameter/19700101000000.000000.00001">
-                    <name>detecStream</name>
-                    <value>%s%s%s</value>
-                </parameter>
-            </parameterSet>
-        '''
+defaultbindingtemplate = ''
+import random, string
+
+def randomword(length):
+   letters = string.ascii_lowercase
+   return ''.join(random.choice(letters) for i in range(length))
 
 def scexec(scmodule='scolv',
            d='postgresql://***:***@eq20a.ethz.ch:5432/sc3dba?column_prefix=m_',
@@ -55,7 +41,7 @@ def scexec(scmodule='scolv',
         None
     """
     if ssh is None:
-        system(f"{scmodule} --offline -d '{d}'  --config-db file://{configdb}  --inventory-db file://{inventorydb} --recordstream='{recordstream}' {options}")
+        system(f"{scmodule}  -d '{d}'  --config-db file://{configdb}  --inventory-db file://{inventorydb} --recordstream='{recordstream}' {options}")
     ###MAKE AN SSH VERSION?
     ##!ssh sc20ag.ethz.ch scolv -u test  -d 'postgresql://***:***@eq20a.ethz.ch:5432/sc3dba?column_prefix=m_'  --config-db file:///home/fmassin/optic-fiber/data/FLUELA/conf.merged.xml  --inventory-db file:///home/fmassin/optic-fiber/data/FLUELA/inv.merged.xml --recordstream='routing://file//home/fmassin/optic-fiber/data/FLUELA/data.mseed??match=OF.*.*.*\;sdsarchive//rz_nas/miniseed/??match=*.*.*.*' -E 'smi:ch.ethz.sed/sc20a/Event/2022dxmayg' --debug
 
@@ -64,7 +50,9 @@ def seedtosc(metadatastationxml='metadata.stationxml',
              db2mergewith='postgresql://****:****@eq20a.ethz.ch:5432/sc3dba?column_prefix=m_',
              confxml='conf.xml',
              invmergedxml='inv.merged.xml',
-             confmergedxml='conf.merged.xml'):
+             confmergedxml='conf.merged.xml',
+             scxmldump='scxmldump', #'ssh sc20ag.ethz.ch scxmldump'
+             ):
     """
     Convert metadata from FDSNXML format to SCXML format and merge it within SCXML files.
 
@@ -81,18 +69,18 @@ def seedtosc(metadatastationxml='metadata.stationxml',
     """
 
     system(f"fdsnxml2inv '{metadatastationxml}'  '{metadatascxml}'")
-    system(f"scxmldump -d '{db2mergewith}' -I | scxmlmerge - '{metadatascxml}' > '{invmergedxml}'")
+    system(f"{scxmldump} -d '{db2mergewith}' -I | scxmlmerge - '{metadatascxml}' > '{invmergedxml}'")
 
     if confxml is None:
         return
-    system(f"scxmldump -d '{db2mergewith}' -C | scxmlmerge - '{confxml}'       > '{confmergedxml}'")
+    system(f"{scxmldump} -d '{db2mergewith}' -C | scxmlmerge - '{confxml}'       > '{confmergedxml}'")
 
     ### MAKE AN SSH VERSION?
-    ##!rsync -avzl ../../../optic-fiber/ sc20ag.ethz.ch:optic-fiber/ 
+    ##!rsync -avzl ../../../optic-fiber/ sc20ag.ethz.ch:optic-fiber/
     ##!ssh sc20ag.ethz.ch fdsnxml2inv optic-fiber/data/FLUELA/metadata.stationxml  optic-fiber/data/FLUELA/metadata.scxml
     ##!ssh sc20ag.ethz.ch scxmldump -d 'postgresql://****:****@eq20a.ethz.ch:5432/sc3dba?column_prefix=m_'  -I \| scxmlmerge - optic-fiber/data/FLUELA/metadata.scxml  \> optic-fiber/data/FLUELA/inv.merged.xml
     ##!ssh sc20ag.ethz.ch scxmldump -d 'postgresql://****:****@eq20a.ethz.ch:5432/sc3dba?column_prefix=m_'  -C \| scxmlmerge - optic-fiber/data/FLUELA/conf.xml        \> optic-fiber/data/FLUELA/conf.merged.xml
-    
+
 
 
 def h5toseed(strainfile=None,
@@ -129,20 +117,22 @@ def h5toseed(strainfile=None,
         metadatastationxml (str): Path to the output StationXML file.
         nrlbackup (str): Path to the NRL backup file.
         datakey (str): Key to access the data in the HDF5 file.
-        bindingtemplate (str): Template for generating SeisComP station configuration bindings. 
-        seiscompschema (str): SeisComP schema version. 
+        bindingtemplate (str): Template for generating SeisComP station configuration bindings.
+        seiscompschema (str): SeisComP schema version.
         **attr: Additional attributes for the SEED metadata.
 
     Returns:
         tuple: A tuple containing the Inventory object, Stream object, and the SeisComP station configuration XML string.
     """
 
-    alphanum = [l+k for l in '0123456789' for k in '0123456789']
-    alphanum += [l+k for l in string.ascii_uppercase for k in string.ascii_uppercase] 
-    alphanum += [l+k for l in string.ascii_lowercase for k in string.ascii_lowercase]     
+    alphanum =  [l+k for l in string.ascii_uppercase for k in '0123456789']
+    alphanum += [l+k for l in string.ascii_uppercase for k in string.ascii_uppercase]
+    alphanum += [l+k for l in '0123456789'           for k in string.ascii_uppercase]
+    alphanum += [l+k for l in '0123456789'           for k in '0123456789']
+    #alphanum += [l+k for l in string.ascii_lowercase for k in string.ascii_lowercase]
     print('max num of stations:',len(alphanum))
 
-    # Create all the base objects. 
+    # Create all the base objects.
     attr['starttime'] = UTCDateTime(attr['starttime'])
 
     if coordinates is not None:
@@ -200,16 +190,16 @@ def h5toseed(strainfile=None,
     # Here we assume that the end point of data logger and sensor are already
     # known:
     velocity_response = NRL(nrlbackup).get_response(sensor_keys=['Generic', 'Unity Velocity Sensor'],
-                                datalogger_keys=['Generic', 'Unity']) 
+                                datalogger_keys=['Generic', 'Unity'])
     #https://ds.iris.edu/NRL/sensors/generic/RESP.XX.NS000..BHZ.UNITY.DC.1
 
     strain_response = NRL(nrlbackup).get_response(sensor_keys=['Generic', 'Unity Velocity Sensor'],
-                                datalogger_keys=['Generic', 'Unity']) 
+                                datalogger_keys=['Generic', 'Unity'])
     #https://ds.iris.edu/NRL/sensors/generic/RESP.XX.NS000..BHZ.UNITY.DC.1
 
-    strain_response.instrument_sensitivity.input_units = attr['units'] 
-    strain_response.instrument_sensitivity.input_units_description = attr['units_description'] 
-    strain_response.response_stages[0].input_units = attr['units'] 
+    strain_response.instrument_sensitivity.input_units = attr['units']
+    strain_response.instrument_sensitivity.input_units_description = attr['units_description']
+    strain_response.response_stages[0].input_units = attr['units']
     strain_response.response_stages[0].input_units_description = attr['units_description']
 
 
@@ -220,7 +210,7 @@ def h5toseed(strainfile=None,
             print(f)
             with h5py.File(f, 'r') as file:
                 tmpdata = np.array(file[datakey])
-                if stationdim ==1:
+                if stationdim == 1:
                     tmpdata = np.transpose(np.array(file[datakey]))
 
                 if strain_array is None:
@@ -229,7 +219,7 @@ def h5toseed(strainfile=None,
                     strain_array = np.concatenate([strain_array, tmpdata / sensitivity], axis=0)
 
                 print('strain_array.shape : %s'%str(strain_array.shape))
-        
+
         strain_array = strain_array.astype(np.float64)
 
     if velocityfile is not None:
@@ -243,14 +233,14 @@ def h5toseed(strainfile=None,
     locationindex = -1
     stationindex = -1
     sta = None
-    
-    for i in range(strain_array.shape[1]): 
-        
+
+    for i in range(strain_array.shape[1]):
+
         locationindex += 1
 
         # Create new station once max number of location codes reached
         if locationindex >= locationsperstation or stationindex == -1:
-            
+
             if sta is not None:
                 net.stations.append(sta)
 
@@ -259,7 +249,7 @@ def h5toseed(strainfile=None,
 
             attr['station'] = attr['station'][:3]+alphanum[stationindex]
             stations += [attr['station']]
-        
+
             # This is the station code according to the SEED standard.
             sta = Station(code=attr['station'],
                             latitude=attr['latitude'],
@@ -267,8 +257,10 @@ def h5toseed(strainfile=None,
                             elevation=attr['elevation'],
                             creation_date=UTCDateTime(2016, 1, 2),
                             site=Site(name=attr['description']))
-        
+
         attr['location'] = alphanum[locationindex]
+        if locationsperstation == 1:
+            attr['location'] = ''
 
         # accurate location if available
         if coordinates is not None:
@@ -278,13 +270,13 @@ def h5toseed(strainfile=None,
 
         # strain channel if strain file is provided
         if strainfile is not None:
-            
+
             attr['npts'] = len(strain_array[:,i])
-            attr['channel'] = '%s%s%s'%(band_code,strain_code,orientation_code) 
+            attr['channel'] = '%s%s%s'%(band_code,strain_code,orientation_code)
             stream += Trace(data=strain_array[:,i],header=attr)
 
             cha = Channel(
-                code=attr['channel'], 
+                code=attr['channel'],
                 location_code=attr['location'],
                 latitude=attr['latitude'],
                 longitude=attr['longitude'],
@@ -308,7 +300,7 @@ def h5toseed(strainfile=None,
         stream += Trace(data=velocity_array[:,i],header=attr)
 
         cha = Channel(
-            code=attr['channel'], 
+            code=attr['channel'],
             location_code=attr['location'],
             latitude=attr['latitude'],
             longitude=attr['longitude'],
@@ -322,10 +314,10 @@ def h5toseed(strainfile=None,
         cha.response = velocity_response
         sta.channels.append(cha)
 
-        
+
     if sta is not None:
         net.stations.append(sta)
-        
+
     inv.networks.append(net)
 
     # Write station inventory to a StationXML file. We also force a validation against
@@ -333,7 +325,7 @@ def h5toseed(strainfile=None,
     inv.write(metadatastationxml, format="stationxml", validate=True)
     print(inv)
 
-    # Write trace stream to miniseed file. We force record length and encoding style 
+    # Write trace stream to miniseed file. We force record length and encoding style
     # for consistency with SeisComP
     print(stream.__str__(extended=True))
     stream.write(datamseed, format="MSEED", reclen=512, encoding='FLOAT64')
@@ -344,21 +336,52 @@ def h5toseed(strainfile=None,
         binding ="""<?xml version="1.0" encoding="UTF-8"?>
         <seiscomp %s>
             <Config>
+                <module publicID="Config/trunk" name="trunk" enabled="true">
         """%seiscompschema
-        
+
         ## indiv station bindings
         for station in stations:
-            binding += bindingtemplate%(attr['network'],
-                                        station,attr['network'],
-                                        station,attr['network'],
-                                        station,attr['network'],
-                                        station,band_code,
-                                        strain_code,orientation_code)
-        ## finish bindings    
+            binding += """
+                <station publicID="Config/trunk/%s/%s"
+                            networkCode="%s" stationCode="%s" enabled="true">
+                    <setup name="default" enabled="true">
+                    <parameterSetID>ParameterSet/trunk/Station/%s/%s/default</parameterSetID>
+                    </setup>
+                </station>"""%(attr['network'],
+                                        station,
+                                        attr['network'],
+                                        station,
+                                        attr['network'],
+                                        station)
+
+        binding +="""
+                </module>
+                """
+        ## indiv station bindings
+        for station in stations:
+            binding += """
+            <parameterSet publicID="ParameterSet/trunk/Station/%s/%s/default" created="1970-01-01T00:00:00.000000Z">
+                <moduleID>Config/trunk</moduleID>
+                <parameter publicID="smi:ch.ethz.sed/h5toseed/Parameter/%s0">
+                    <name>detecLocid</name>
+                    <value>%s</value>
+                </parameter>
+                <parameter publicID="smi:ch.ethz.sed/h5toseed/Parameter/%s1">
+                    <name>detecStream</name>
+                    <value>%s%s%s</value>
+                </parameter>
+            </parameterSet>
+        """%(attr['network'],
+                                        station,
+                                        UTCDateTime().format_fissures()+'.'+randomword(6),#19700101000000.000000.0000
+                                        attr['location'],
+                                        UTCDateTime().format_fissures()+'.'+randomword(6),#19700101000000.000000.0000
+                                        band_code,strain_code,orientation_code)
+        ## finish bindings
         binding += '''</Config>
         </seiscomp>'''
 
         with open(confxml, "w") as binding_file:
             binding_file.write(binding)
-    
+
     return inv,stream,binding
